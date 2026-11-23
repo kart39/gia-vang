@@ -34,6 +34,15 @@ class ParsePnjTest(unittest.TestCase):
         self.assertIsNone(result["ring_buy"])
         self.assertIsNone(result["ring_sell"])
 
+    def test_parse_pnj_rejects_implausible_prices(self):
+        # 0 = sản phẩm tạm ngưng; 13250000 = đổi đơn vị sang đồng; -1 = rác
+        for bad in (0, -1, 13250000, 500):
+            with self.subTest(bad=bad):
+                payload = {"data": [{"masp": "N24K", "giaban": bad, "giamua": 12700}]}
+                result = parse_pnj(payload)
+                self.assertIsNone(result["ring_sell"])
+                self.assertEqual(result["ring_buy"], 12700)
+
     def test_parse_pnj_bad_payload(self):
         for payload in (None, {}, {"data": "x"}, {"data": [None, "x", {"masp": "SJC"}]}):
             with self.subTest(payload=payload):
@@ -45,7 +54,7 @@ class ParseXauTest(unittest.TestCase):
         self.assertEqual(parse_xau({"price": 3613.050049}), 3613.05)
 
     def test_parse_xau_bad_payload(self):
-        for payload in (None, {}, {"price": "abc"}):
+        for payload in (None, {}, {"price": "abc"}, {"price": 0}, {"price": -5}):
             with self.subTest(payload=payload):
                 self.assertIsNone(parse_xau(payload))
 

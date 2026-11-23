@@ -20,10 +20,18 @@ export function latest(history) {
   return history.length ? history[history.length - 1] : null;
 }
 
-/** So bản ghi mới nhất với bản ghi gần mốc 24 giờ trước nhất (trong ±90 phút). */
+/** Giá trị gần nhất của một trường (bỏ qua những giờ nguồn đó bị lỗi), kèm thời điểm ghi. */
+export function latestValue(history, field) {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i][field] != null) return { value: history[i][field], t: history[i].t };
+  }
+  return null;
+}
+
+/** So giá trị mới nhất với bản ghi gần mốc 24 giờ trước nhất (trong ±90 phút). */
 export function change24h(history, field) {
-  const last = latest(history);
-  if (!last || last[field] == null) return null;
+  const last = latestValue(history, field);
+  if (!last) return null;
   const target = Date.parse(last.t) - 24 * HOUR_MS;
   let best = null;
   let bestDistance = Infinity;
@@ -36,7 +44,7 @@ export function change24h(history, field) {
     }
   }
   if (!best) return null;
-  const diff = round2(last[field] - best[field]);
+  const diff = round2(last.value - best[field]);
   return { diff, dir: diff > 0 ? "up" : diff < 0 ? "down" : "flat" };
 }
 
@@ -75,4 +83,10 @@ export function parseTarget(input) {
 export function targetHit(sellPerChiThousand, targetLuong) {
   if (sellPerChiThousand == null || targetLuong == null) return false;
   return toLuong(sellPerChiThousand) <= targetLuong;
+}
+
+/** Mức muốn mua lệch quá xa giá bán hiện tại (cả hai theo triệu/lượng): nhiều khả năng nhập nhầm đơn vị. */
+export function targetLooksWrong(targetLuong, sellLuong) {
+  if (targetLuong == null || sellLuong == null) return false;
+  return targetLuong < sellLuong * 0.5 || targetLuong > sellLuong * 1.5;
 }

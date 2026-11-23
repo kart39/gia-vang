@@ -16,6 +16,9 @@ HISTORY_PATH = Path(__file__).resolve().parent.parent / "data" / "history.json"
 # Mã sản phẩm của PNJ -> tiền tố trường trong bản ghi.
 # Giá PNJ tính theo nghìn đồng/chỉ.
 PNJ_PRODUCTS = {"SJC": "sjc", "N24K": "ring"}
+# Giá ngoài khoảng này (nghìn đồng/chỉ) gần như chắc chắn là lỗi dữ liệu: 0 khi tạm ngưng
+# bán, hoặc nguồn đổi đơn vị. Bỏ đi để không báo nhầm "đã chạm giá muốn mua".
+PNJ_PLAUSIBLE = (1_000, 100_000)
 
 
 def fetch_json(url, timeout=20):
@@ -38,6 +41,17 @@ def _to_int(value):
         return None
 
 
+def _plausible_pnj(value):
+    number = _to_int(value)
+    if number is None:
+        return None
+    low, high = PNJ_PLAUSIBLE
+    if not low <= number <= high:
+        print(f"Bỏ giá PNJ bất thường: {value}", file=sys.stderr)
+        return None
+    return number
+
+
 def parse_pnj(payload):
     result = {f"{prefix}_{side}": None for prefix in PNJ_PRODUCTS.values() for side in ("buy", "sell")}
     items = payload.get("data") if isinstance(payload, dict) else None
@@ -47,8 +61,8 @@ def parse_pnj(payload):
         if not isinstance(item, dict) or item.get("masp") not in PNJ_PRODUCTS:
             continue
         prefix = PNJ_PRODUCTS[item["masp"]]
-        result[f"{prefix}_buy"] = _to_int(item.get("giamua"))
-        result[f"{prefix}_sell"] = _to_int(item.get("giaban"))
+        result[f"{prefix}_buy"] = _plausible_pnj(item.get("giamua"))
+        result[f"{prefix}_sell"] = _plausible_pnj(item.get("giaban"))
     return result
 
 
@@ -56,9 +70,10 @@ def parse_xau(payload):
     if not isinstance(payload, dict):
         return None
     try:
-        return round(float(payload["price"]), 2)
+        price = round(float(payload["price"]), 2)
     except (KeyError, TypeError, ValueError):
         return None
+    return price if price > 0 else None
 
 
 def build_record(now, pnj, xau):

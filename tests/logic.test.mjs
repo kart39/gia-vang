@@ -10,6 +10,8 @@ import {
   segmentDir,
   parseTarget,
   targetHit,
+  latestValue,
+  targetLooksWrong,
 } from "../assets/logic.js";
 
 const HOUR = 3600_000;
@@ -103,4 +105,32 @@ test("targetHit compares sell price in triệu/lượng with the target", () => 
   assert.equal(targetHit(13260, 132.5), false);
   assert.equal(targetHit(null, 132.5), false);
   assert.equal(targetHit(13250, null), false);
+});
+
+test("latestValue skips records where that field failed", () => {
+  const history = [
+    rec("2026-11-23T07:05:00Z", { ring_sell: 13250, xau_usd: 3600 }),
+    rec("2026-11-23T08:05:00Z", { ring_sell: null, xau_usd: 3610 }),
+  ];
+  assert.deepEqual(latestValue(history, "ring_sell"), { value: 13250, t: "2026-11-23T07:05:00Z" });
+  assert.deepEqual(latestValue(history, "xau_usd"), { value: 3610, t: "2026-11-23T08:05:00Z" });
+  assert.equal(latestValue(history, "sjc_sell"), null);
+  assert.equal(latestValue([], "sjc_sell"), null);
+});
+
+test("change24h uses the latest non-null value of the field", () => {
+  const history = [
+    rec("2026-11-22T08:05:00Z", { ring_sell: 13200 }),
+    rec("2026-11-23T08:05:00Z", { ring_sell: 13250 }),
+    rec("2026-11-23T09:05:00Z", { ring_sell: null, xau_usd: 3600 }),
+  ];
+  assert.deepEqual(change24h(history, "ring_sell"), { diff: 50, dir: "up" });
+});
+
+test("targetLooksWrong flags targets far from the current sell price", () => {
+  assert.equal(targetLooksWrong(13.2, 132.5), true); // nhập theo triệu/chỉ
+  assert.equal(targetLooksWrong(13250, 132.5), true); // nhập theo đơn vị gốc của PNJ
+  assert.equal(targetLooksWrong(128, 132.5), false);
+  assert.equal(targetLooksWrong(null, 132.5), false);
+  assert.equal(targetLooksWrong(128, null), false);
 });

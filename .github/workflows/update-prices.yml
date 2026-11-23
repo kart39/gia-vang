@@ -18,6 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Lần chạy xếp hàng sau một lần chạy khác phải lấy file dữ liệu mới nhất,
+      # nếu không hai lần ghi sẽ xung đột khi push.
+      - name: Lấy dữ liệu mới nhất
+        run: git pull --ff-only origin main
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

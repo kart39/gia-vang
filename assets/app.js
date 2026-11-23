@@ -8,6 +8,8 @@ import {
   segmentDir,
   parseTarget,
   targetHit,
+  latestValue,
+  targetLooksWrong,
 } from "./logic.js";
 
 const DAY_MS = 24 * 3600_000;
@@ -19,6 +21,9 @@ const PRODUCTS = {
   ring: { name: "Nhẫn trơn 999.9", buy: "ring_buy", sell: "ring_sell" },
   sjc: { name: "Vàng miếng SJC", buy: "sjc_buy", sell: "sjc_sell" },
 };
+
+// Mỗi trường lấy giá trị gần nhất của riêng nó: giờ nào một nguồn lỗi thì vẫn giữ giá cũ của nguồn đó.
+const valueOf = (field) => latestValue(state.history, field)?.value ?? null;
 
 const state = { history: [], series: "ring_sell", days: 7, loadError: false };
 let chart = null;
@@ -91,15 +96,15 @@ function renderBoard() {
 
   for (const [key, product] of Object.entries(PRODUCTS)) {
     const row = $(`#row-${key}`);
-    $("[data-buy]", row).textContent = formatVnd(toLuong(last?.[product.buy] ?? null));
-    $("[data-sell]", row).textContent = formatVnd(toLuong(last?.[product.sell] ?? null));
-    const perChi = toChi(last?.[product.sell] ?? null);
+    $("[data-buy]", row).textContent = formatVnd(toLuong(valueOf(product.buy)));
+    $("[data-sell]", row).textContent = formatVnd(toLuong(valueOf(product.sell)));
+    const perChi = toChi(valueOf(product.sell));
     $("[data-sell-chi]", row).textContent = perChi == null ? "" : `${formatVnd(perChi)} triệu/chỉ`;
     renderChange($("[data-change]", row), change24h(state.history, product.sell), toLuong, formatVnd);
   }
 
   const xauRow = $("#row-xau");
-  $("[data-sell]", xauRow).textContent = formatUsd(last?.xau_usd ?? null);
+  $("[data-sell]", xauRow).textContent = formatUsd(valueOf("xau_usd"));
   renderChange($("[data-change]", xauRow), change24h(state.history, "xau_usd"), (n) => n, formatUsd);
 }
 
@@ -125,9 +130,18 @@ function renderNotices() {
   }
   if (last && isStale(last.t, Date.now())) {
     items.push(notice("warn", `Giá chưa được cập nhật từ ${dateTime.format(new Date(last.t))}, số trên bảng có thể đã cũ.`));
+  } else if (last) {
+    // Bản ghi mới nhất còn mới nhưng một nguồn có thể đã lỗi nhiều giờ liền.
+    const sources = [...Object.values(PRODUCTS).map((p) => [p.name, p.sell]), ["vàng thế giới", "xau_usd"]];
+    for (const [name, field] of sources) {
+      const lv = latestValue(state.history, field);
+      if (lv && isStale(lv.t, Date.now())) {
+        items.push(notice("warn", `Giá ${name} chưa cập nhật từ ${dateTime.format(new Date(lv.t))}, số này có thể đã cũ.`));
+      }
+    }
   }
   for (const [key, product] of Object.entries(PRODUCTS)) {
-    const sell = last?.[product.sell] ?? null;
+    const sell = valueOf(product.sell);
     if (targetHit(sell, targets[key])) {
       items.push(notice("hit",
         `${product.name} đang bán ${formatVnd(toLuong(sell))} triệu/lượng, đã xuống tới mức bạn muốn mua (${formatVnd(targets[key])}).`));
@@ -239,23 +253,37 @@ function bindSegment(groupId, onPick) {
   });
 }
 
+function renderTargetHints() {
+  const form = $("#targets");
+  const messages = [];
+  for (const [key, product] of Object.entries(PRODUCTS)) {
+    const text = form.elements[key].value.trim();
+    if (text && parseTarget(text) == null) {
+      messages.push(`${product.name}: nhập giá bằng số, ví dụ 130,5.`);
+      continue;
+    }
+    const sell = toLuong(valueOf(product.sell));
+    if (targetLooksWrong(targets[key], sell)) {
+      messages.push(`${product.name}: giá bán hiện tại là ${formatVnd(sell)} triệu/lượng. Kiểm tra lại, mức giá cần nhập theo triệu đồng/lượng.`);
+    }
+  }
+  $("#target-error").textContent = messages.join(" ");
+}
+
 function bindTargets() {
   const form = $("#targets");
-  const error = $("#target-error");
   for (const key of Object.keys(PRODUCTS)) {
     const input = form.elements[key];
-    if (targets[key] != null) input.value = formatVnd(targets[key]);
+    if (targets[key] != null) input.value = String(targets[key]).replace(".", ",");
     input.addEventListener("input", () => {
       const text = input.value.trim();
       const value = parseTarget(text);
-      if (text && value == null) {
-        error.textContent = "Nhập giá bằng số, ví dụ 130,5.";
-        return;
+      if (!text || value != null) {
+        targets = { ...targets, [key]: value };
+        saveTargets(targets);
+        renderNotices();
       }
-      error.textContent = "";
-      targets = { ...targets, [key]: value };
-      saveTargets(targets);
-      renderNotices();
+      renderTargetHints();
     });
   }
   form.addEventListener("submit", (event) => event.preventDefault());
@@ -275,6 +303,7 @@ async function load() {
   }
   renderBoard();
   renderNotices();
+  renderTargetHints();
   renderChart();
 }
 
