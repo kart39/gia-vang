@@ -12,6 +12,7 @@ import {
   targetHit,
   latestValue,
   targetLooksWrong,
+  cheapest,
 } from "../assets/logic.js";
 
 const HOUR = 3600_000;
@@ -133,4 +134,11 @@ test("targetLooksWrong flags targets far from the current sell price", () => {
   assert.equal(targetLooksWrong(128, 132.5), false);
   assert.equal(targetLooksWrong(null, 132.5), false);
   assert.equal(targetLooksWrong(128, null), false);
+});
+
+test("cheapest picks the lowest sell price and ignores missing shops", () => {
+  assert.deepEqual(cheapest([{ shop: "PNJ", value: 13250 }, { shop: "BTMC", value: 13450 }]), { shop: "PNJ", value: 13250 });
+  assert.deepEqual(cheapest([{ shop: "PNJ", value: null }, { shop: "BTMC", value: 13450 }]), { shop: "BTMC", value: 13450 });
+  assert.equal(cheapest([{ shop: "PNJ", value: null }]), null);
+  assert.equal(cheapest([]), null);
 });

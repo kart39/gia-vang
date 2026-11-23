@@ -111,7 +111,8 @@ button, input { font: inherit; color: inherit; }
 
 .board__unit { margin: 2px 0 6px; font-size: 0.75rem; opacity: 0.7; }
 
-.row--world { grid-template-columns: minmax(0, 1fr) auto; }
+.group { margin: 0; padding: 14px 0 2px; border-top: 1px solid rgba(232, 192, 90, 0.45); font-size: 1rem; font-weight: 700; color: var(--gold); }
+.group + .row { border-top: 0; }
 
 /* Thông báo */
 .notices { display: grid; gap: 10px; margin: 14px 0 0; }
@@ -162,6 +163,8 @@ button, input { font: inherit; color: inherit; }
   margin-right: 6px;
   vertical-align: middle;
 }
+.legend__item--solid::before { background: var(--muted); }
+.legend__item--dashed::before { background: repeating-linear-gradient(90deg, var(--muted) 0 6px, transparent 6px 10px); }
 .legend__item--up::before { background: var(--up); }
 .legend__item--down::before { background: var(--down); }
 .legend__item--gap::before { background: repeating-linear-gradient(90deg, var(--flat) 0 3px, transparent 3px 6px); }

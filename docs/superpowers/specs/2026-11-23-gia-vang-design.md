@@ -69,3 +69,23 @@ Các lỗi sau làm app hỏng về mặt mục đích dù code vẫn chạy:
 - **Trang web:** một file HTML, biểu đồ vẽ bằng Chart.js tải từ CDN, giao diện ưu tiên điện thoại. Khi đang mở, trang tự tải lại dữ liệu mỗi 10 phút.
 - **Tên repo:** `gia-vang`.
 - **Cài đặt GitHub:** nếu máy đã có `gh` CLI và đã đăng nhập, Claude tạo repo và bật Pages giúp, sau khi người dùng đồng ý. Nếu chưa, Claude viết hướng dẫn từng bước.
+
+## Thay đổi 2026-11-23 (theo yêu cầu người dùng)
+
+Người dùng yêu cầu: lấy giá **Hà Nội**, **bỏ giá vàng thế giới**, và muốn dùng giá từ trang SJC và Bảo Tín Mạnh Hải.
+
+- **Trang SJC:** không dùng được. Trang có lớp chặn máy tự động của Cloudflare, và chúng ta không vượt lớp chặn. Giá vàng miếng SJC lấy qua các tiệm niêm yết nó.
+- **Bảo Tín Mạnh Hải:** chưa xác minh được nguồn dữ liệu dùng được. Người dùng chấp nhận dùng nguồn khác, "miễn là nó uy tín".
+- **Nguồn mới (thay toàn bộ nguồn cũ):**
+
+| Nguồn | Địa chỉ | Sản phẩm | Đơn vị gốc |
+|---|---|---|---|
+| PNJ, chi nhánh Hà Nội | `https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price?zone=11` (`chinhanh: "hanoi"`) | `masp` `SJC`, `N24K` | nghìn đồng/chỉ |
+| Bảo Tín Minh Châu (BTMC) | `https://api.btmc.vn/api/BTMCAPI/getpricebtmc?key=3kd8ub1llcg9t45hnoh8hmn7t5kc2v` | tên `VÀNG MIẾNG SJC (Vàng SJC)`, `NHẪN TRÒN TRƠN (Vàng Rồng Thăng Long)`. Danh sách có nhiều mốc giờ cho cùng một sản phẩm, lấy mốc `@d_N` (`dd/MM/yyyy HH:mm`) mới nhất | đồng/chỉ, ÷1000 khi lưu |
+
+- **Bản ghi mới:** `{t, pnj_sjc_buy, pnj_sjc_sell, pnj_ring_buy, pnj_ring_sell, btmc_sjc_buy, btmc_sjc_sell, btmc_ring_buy, btmc_ring_sell}`, tất cả tính theo nghìn đồng/chỉ. Không còn `xau_usd`.
+  - Ba bản ghi cũ (PNJ TP.HCM, cùng giá với Hà Nội trong ngày 23/11) được đổi tên trường sang `pnj_*`, giá thế giới bị bỏ. *(quyết định của Claude)*
+- **Bảng giá:** hai nhóm (Nhẫn trơn 999.9, Vàng miếng SJC), mỗi nhóm một dòng PNJ và một dòng Bảo Tín Minh Châu.
+- **Biểu đồ:** chọn Nhẫn trơn hoặc SJC. Hai đường: PNJ nét liền, Bảo Tín Minh Châu nét đứt. Cả hai vẫn tô xanh/đỏ theo tăng/giảm. *(quyết định của Claude)*
+- **Giá muốn mua:** vẫn một mức cho mỗi loại vàng. Báo khi **tiệm rẻ nhất** có giá bán ≤ mức đó, và ghi rõ tên tiệm.
+- **Cảnh báo dữ liệu cũ:** tính riêng cho từng nguồn.

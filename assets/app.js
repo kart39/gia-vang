@@ -10,6 +10,7 @@ import {
   targetHit,
   latestValue,
   targetLooksWrong,
+  cheapest,
 } from "./logic.js";
 
 const DAY_MS = 24 * 3600_000;
@@ -17,23 +18,24 @@ const REFRESH_MS = 10 * 60_000;
 const TARGETS_KEY = "giavang.targets";
 const TZ = "Asia/Ho_Chi_Minh";
 
-const PRODUCTS = {
-  ring: { name: "Nhẫn trơn 999.9", buy: "ring_buy", sell: "ring_sell" },
-  sjc: { name: "Vàng miếng SJC", buy: "sjc_buy", sell: "sjc_sell" },
-};
+// Trường trong bản ghi: `${shop}_${kind}_${side}`, giá theo nghìn đồng/chỉ.
+const SHOPS = [
+  { id: "pnj", name: "PNJ", dash: [] },
+  { id: "btmc", name: "Bảo Tín Minh Châu", dash: [6, 4] },
+];
+const KINDS = [
+  { id: "ring", name: "Nhẫn trơn 999.9" },
+  { id: "sjc", name: "Vàng miếng SJC" },
+];
+const field = (shop, kind, side) => `${shop}_${kind}_${side}`;
 
-// Mỗi trường lấy giá trị gần nhất của riêng nó: giờ nào một nguồn lỗi thì vẫn giữ giá cũ của nguồn đó.
-const valueOf = (field) => latestValue(state.history, field)?.value ?? null;
-
-const state = { history: [], series: "ring_sell", days: 7, loadError: false };
+const state = { history: [], kind: "ring", days: 7, loadError: false };
 let chart = null;
 
 const $ = (selector, root = document) => root.querySelector(selector);
 
 const formatVnd = (n) =>
   n == null ? "–" : n.toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
-const formatUsd = (n) =>
-  n == null ? "–" : n.toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const dateTime = new Intl.DateTimeFormat("vi-VN", {
   timeZone: TZ, hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric",
@@ -48,6 +50,14 @@ function hourLabel(ms) {
 
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+// Mỗi trường lấy giá trị gần nhất của riêng nó: giờ nào một nguồn lỗi thì vẫn giữ giá cũ của nguồn đó.
+const valueOf = (name) => latestValue(state.history, name)?.value ?? null;
+
+/** Tiệm đang bán rẻ nhất cho một loại vàng: {shop, value} hoặc null. */
+function cheapestSell(kind) {
+  return cheapest(SHOPS.map((shop) => ({ shop: shop.name, value: valueOf(field(shop.id, kind, "sell")) })));
 }
 
 // ---------- Giá muốn mua (lưu trong trình duyệt) ----------
@@ -73,54 +83,68 @@ let targets = loadTargets();
 
 // ---------- Bảng giá ----------
 
-function renderChange(el, change, toDisplay, format) {
-  if (!change) {
-    el.textContent = "";
-    el.removeAttribute("data-dir");
-    return;
-  }
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+function changeLine(change) {
+  const line = el("div", "row__change");
+  if (!change) return line;
   const arrow = { up: "▲", down: "▼", flat: "■" }[change.dir];
-  const amount = change.dir === "flat" ? "không đổi" : format(Math.abs(toDisplay(change.diff)));
-  el.textContent = `${arrow} ${amount} trong 24 giờ`;
-  el.dataset.dir = change.dir;
+  const amount = change.dir === "flat" ? "không đổi" : formatVnd(Math.abs(toLuong(change.diff)));
+  line.textContent = `${arrow} ${amount} trong 24 giờ`;
+  line.dataset.dir = change.dir;
+  return line;
+}
+
+function priceRow(shop, kind) {
+  const buy = valueOf(field(shop.id, kind.id, "buy"));
+  const sell = valueOf(field(shop.id, kind.id, "sell"));
+  const row = el("div", "row");
+  row.append(el("div", "row__name", shop.name), el("div", "row__price", formatVnd(toLuong(buy))));
+  const sellCell = el("div", "row__price row__price--sell");
+  sellCell.append(el("span", null, formatVnd(toLuong(sell))));
+  const perChi = toChi(sell);
+  sellCell.append(el("small", null, perChi == null ? "" : `${formatVnd(perChi)} triệu/chỉ`));
+  row.append(sellCell, changeLine(change24h(state.history, field(shop.id, kind.id, "sell"))));
+  return row;
 }
 
 function renderBoard() {
   const last = latest(state.history);
-  const updated = $("#updated");
-  if (!last) {
-    updated.textContent = state.loadError ? "Không tải được dữ liệu" : "Chưa có dữ liệu";
-  } else {
-    updated.textContent = `Cập nhật lúc ${dateTime.format(new Date(last.t))}`;
-  }
+  $("#updated").textContent = last
+    ? `Cập nhật lúc ${dateTime.format(new Date(last.t))}`
+    : state.loadError ? "Không tải được dữ liệu" : "Chưa có dữ liệu";
 
-  for (const [key, product] of Object.entries(PRODUCTS)) {
-    const row = $(`#row-${key}`);
-    $("[data-buy]", row).textContent = formatVnd(toLuong(valueOf(product.buy)));
-    $("[data-sell]", row).textContent = formatVnd(toLuong(valueOf(product.sell)));
-    const perChi = toChi(valueOf(product.sell));
-    $("[data-sell-chi]", row).textContent = perChi == null ? "" : `${formatVnd(perChi)} triệu/chỉ`;
-    renderChange($("[data-change]", row), change24h(state.history, product.sell), toLuong, formatVnd);
+  const rows = [];
+  for (const kind of KINDS) {
+    rows.push(el("h2", "group", kind.name));
+    for (const shop of SHOPS) rows.push(priceRow(shop, kind));
   }
-
-  const xauRow = $("#row-xau");
-  $("[data-sell]", xauRow).textContent = formatUsd(valueOf("xau_usd"));
-  renderChange($("[data-change]", xauRow), change24h(state.history, "xau_usd"), (n) => n, formatUsd);
+  $("#board-rows").replaceChildren(...rows);
 }
 
 // ---------- Thông báo ----------
 
 function notice(kind, text) {
-  const p = document.createElement("p");
-  p.className = `notice notice--${kind}`;
-  p.textContent = text;
-  return p;
+  return el("p", `notice notice--${kind}`, text);
+}
+
+/** Thời điểm gần nhất một tiệm còn trả về giá (bất kỳ loại vàng nào). */
+function shopLastSeen(shop) {
+  const times = KINDS.map((kind) => latestValue(state.history, field(shop.id, kind.id, "sell"))?.t)
+    .filter(Boolean)
+    .map(Date.parse);
+  return times.length ? Math.max(...times) : null;
 }
 
 function renderNotices() {
-  const box = $("#notices");
   const items = [];
   const last = latest(state.history);
+  const now = Date.now();
 
   if (state.loadError) {
     items.push(notice("warn", "Không tải được giá mới. Kiểm tra kết nối mạng, trang sẽ tự thử lại sau 10 phút."));
@@ -128,26 +152,25 @@ function renderNotices() {
   if (!last && !state.loadError) {
     items.push(notice("warn", "Chưa có dữ liệu. Lần ghi giá đầu tiên sẽ có trong vòng 1 giờ."));
   }
-  if (last && isStale(last.t, Date.now())) {
+  if (last && isStale(last.t, now)) {
     items.push(notice("warn", `Giá chưa được cập nhật từ ${dateTime.format(new Date(last.t))}, số trên bảng có thể đã cũ.`));
   } else if (last) {
-    // Bản ghi mới nhất còn mới nhưng một nguồn có thể đã lỗi nhiều giờ liền.
-    const sources = [...Object.values(PRODUCTS).map((p) => [p.name, p.sell]), ["vàng thế giới", "xau_usd"]];
-    for (const [name, field] of sources) {
-      const lv = latestValue(state.history, field);
-      if (lv && isStale(lv.t, Date.now())) {
-        items.push(notice("warn", `Giá ${name} chưa cập nhật từ ${dateTime.format(new Date(lv.t))}, số này có thể đã cũ.`));
+    // Bản ghi mới nhất còn mới nhưng một tiệm có thể đã lỗi nhiều giờ liền.
+    for (const shop of SHOPS) {
+      const seen = shopLastSeen(shop);
+      if (seen != null && isStale(new Date(seen).toISOString(), now)) {
+        items.push(notice("warn", `Giá ${shop.name} chưa cập nhật từ ${dateTime.format(new Date(seen))}, số của tiệm này có thể đã cũ.`));
       }
     }
   }
-  for (const [key, product] of Object.entries(PRODUCTS)) {
-    const sell = valueOf(product.sell);
-    if (targetHit(sell, targets[key])) {
+  for (const kind of KINDS) {
+    const best = cheapestSell(kind.id);
+    if (best && targetHit(best.value, targets[kind.id])) {
       items.push(notice("hit",
-        `${product.name} đang bán ${formatVnd(toLuong(sell))} triệu/lượng, đã xuống tới mức bạn muốn mua (${formatVnd(targets[key])}).`));
+        `${kind.name}: ${best.shop} đang bán ${formatVnd(toLuong(best.value))} triệu/lượng, đã xuống tới mức bạn muốn mua (${formatVnd(targets[kind.id])}).`));
     }
   }
-  box.replaceChildren(...items);
+  $("#notices").replaceChildren(...items);
 }
 
 // ---------- Biểu đồ ----------
@@ -156,11 +179,13 @@ function renderChart() {
   const canvas = $("#chart");
   const empty = $("#chart-empty");
   const now = Date.now();
-  const isDomestic = state.series !== "xau_usd";
-  const raw = hourlySeries(state.history, state.series, now - state.days * DAY_MS, now);
-  const values = raw.map((p) => (p.y == null ? null : isDomestic ? toLuong(p.y) : p.y));
+  const since = now - state.days * DAY_MS;
+  const lines = SHOPS.map((shop) => {
+    const raw = hourlySeries(state.history, field(shop.id, state.kind, "sell"), since, now);
+    return { shop, raw, values: raw.map((p) => toLuong(p.y)) };
+  });
 
-  if (!values.some((v) => v != null)) {
+  if (!lines.some((line) => line.values.some((v) => v != null))) {
     chart?.destroy();
     chart = null;
     canvas.hidden = true;
@@ -176,29 +201,27 @@ function renderChart() {
   const colors = { up: cssVar("--up"), down: cssVar("--down"), flat: cssVar("--flat") };
   const ink = cssVar("--muted");
   const grid = cssVar("--line");
-  // Điểm đứng một mình giữa hai giờ trống thì không có đoạn nối, nên vẽ chấm để vẫn thấy.
-  const pointRadius = values.map((v, i) => (v != null && values[i - 1] == null && values[i + 1] == null ? 2.5 : 0));
-  const unit = isDomestic ? "triệu/lượng" : "USD/ounce";
-  const format = isDomestic ? formatVnd : formatUsd;
+
+  const datasets = lines.map(({ shop, values }) => ({
+    label: shop.name,
+    data: values,
+    spanGaps: false,
+    borderWidth: 2,
+    borderDash: shop.dash,
+    tension: 0,
+    // Điểm đứng một mình giữa hai giờ trống thì không có đoạn nối, nên vẽ chấm để vẫn thấy.
+    pointRadius: values.map((v, i) => (v != null && values[i - 1] == null && values[i + 1] == null ? 2.5 : 0)),
+    pointHoverRadius: 4,
+    pointBackgroundColor: colors.flat,
+    borderColor: colors.flat,
+    segment: {
+      borderColor: (ctx) => colors[segmentDir(ctx.p0.parsed.y, ctx.p1.parsed.y)],
+    },
+  }));
 
   const config = {
     type: "line",
-    data: {
-      labels: raw.map((p) => hourLabel(p.x)),
-      datasets: [{
-        data: values,
-        spanGaps: false,
-        borderWidth: 2,
-        tension: 0,
-        pointRadius,
-        pointHoverRadius: 4,
-        pointBackgroundColor: colors.flat,
-        borderColor: colors.flat,
-        segment: {
-          borderColor: (ctx) => colors[segmentDir(ctx.p0.parsed.y, ctx.p1.parsed.y)],
-        },
-      }],
-    },
+    data: { labels: lines[0].raw.map((p) => hourLabel(p.x)), datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -208,7 +231,8 @@ function renderChart() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (ctx) => (ctx.parsed.y == null ? "Không có dữ liệu" : `${format(ctx.parsed.y)} ${unit}`),
+            label: (ctx) =>
+              `${ctx.dataset.label}: ${ctx.parsed.y == null ? "không có dữ liệu" : `${formatVnd(ctx.parsed.y)} triệu/lượng`}`,
           },
         },
       },
@@ -229,7 +253,7 @@ function renderChart() {
           grid: { display: false },
         },
         y: {
-          ticks: { color: ink, callback: (v) => format(v), font: { family: "Be Vietnam Pro" } },
+          ticks: { color: ink, callback: (v) => formatVnd(v), font: { family: "Be Vietnam Pro" } },
           grid: { color: grid },
         },
       },
@@ -256,15 +280,16 @@ function bindSegment(groupId, onPick) {
 function renderTargetHints() {
   const form = $("#targets");
   const messages = [];
-  for (const [key, product] of Object.entries(PRODUCTS)) {
-    const text = form.elements[key].value.trim();
+  for (const kind of KINDS) {
+    const text = form.elements[kind.id].value.trim();
     if (text && parseTarget(text) == null) {
-      messages.push(`${product.name}: nhập giá bằng số, ví dụ 130,5.`);
+      messages.push(`${kind.name}: nhập giá bằng số, ví dụ 130,5.`);
       continue;
     }
-    const sell = toLuong(valueOf(product.sell));
-    if (targetLooksWrong(targets[key], sell)) {
-      messages.push(`${product.name}: giá bán hiện tại là ${formatVnd(sell)} triệu/lượng. Kiểm tra lại, mức giá cần nhập theo triệu đồng/lượng.`);
+    const best = cheapestSell(kind.id);
+    const sell = best ? toLuong(best.value) : null;
+    if (targetLooksWrong(targets[kind.id], sell)) {
+      messages.push(`${kind.name}: giá bán hiện tại khoảng ${formatVnd(sell)} triệu/lượng. Kiểm tra lại, mức giá cần nhập theo triệu đồng/lượng.`);
     }
   }
   $("#target-error").textContent = messages.join(" ");
@@ -272,14 +297,14 @@ function renderTargetHints() {
 
 function bindTargets() {
   const form = $("#targets");
-  for (const key of Object.keys(PRODUCTS)) {
-    const input = form.elements[key];
-    if (targets[key] != null) input.value = String(targets[key]).replace(".", ",");
+  for (const kind of KINDS) {
+    const input = form.elements[kind.id];
+    if (targets[kind.id] != null) input.value = String(targets[kind.id]).replace(".", ",");
     input.addEventListener("input", () => {
       const text = input.value.trim();
       const value = parseTarget(text);
       if (!text || value != null) {
-        targets = { ...targets, [key]: value };
+        targets = { ...targets, [kind.id]: value };
         saveTargets(targets);
         renderNotices();
       }
@@ -307,7 +332,7 @@ async function load() {
   renderChart();
 }
 
-bindSegment("seg-series", (b) => { state.series = b.dataset.series; });
+bindSegment("seg-series", (b) => { state.kind = b.dataset.kind; });
 bindSegment("seg-range", (b) => { state.days = Number(b.dataset.days); });
 bindTargets();
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderChart);

@@ -1,6 +1,7 @@
-"""Lấy giá vàng hiện tại và ghi thêm một bản ghi vào data/history.json.
+"""Lấy giá vàng hiện tại (Hà Nội) và ghi thêm một bản ghi vào data/history.json.
 
 Chạy mỗi giờ bởi GitHub Actions. Chỉ dùng thư viện chuẩn của Python.
+Mọi giá đều lưu theo nghìn đồng/chỉ.
 """
 
 import json
@@ -9,16 +10,21 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-PNJ_URL = "https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price?zone=00"
-XAU_URL = "https://api.gold-api.com/price/XAU"
+# zone=11 là chi nhánh Hà Nội (payload trả về "chinhanh": "hanoi").
+PNJ_URL = "https://edge-api.pnj.io/ecom-frontend/v1/get-gold-price?zone=11"
+BTMC_URL = "https://api.btmc.vn/api/BTMCAPI/getpricebtmc?key=3kd8ub1llcg9t45hnoh8hmn7t5kc2v"
 HISTORY_PATH = Path(__file__).resolve().parent.parent / "data" / "history.json"
 
-# Mã sản phẩm của PNJ -> tiền tố trường trong bản ghi.
-# Giá PNJ tính theo nghìn đồng/chỉ.
+# Mã sản phẩm PNJ -> tên loại vàng trong bản ghi. PNJ tính theo nghìn đồng/chỉ.
 PNJ_PRODUCTS = {"SJC": "sjc", "N24K": "ring"}
+# Tên sản phẩm BTMC -> tên loại vàng. BTMC tính theo đồng/chỉ.
+BTMC_PRODUCTS = {
+    "VÀNG MIẾNG SJC (Vàng SJC)": "sjc",
+    "NHẪN TRÒN TRƠN (Vàng Rồng Thăng Long)": "ring",
+}
 # Giá ngoài khoảng này (nghìn đồng/chỉ) gần như chắc chắn là lỗi dữ liệu: 0 khi tạm ngưng
 # bán, hoặc nguồn đổi đơn vị. Bỏ đi để không báo nhầm "đã chạm giá muốn mua".
-PNJ_PLAUSIBLE = (1_000, 100_000)
+PLAUSIBLE = (1_000, 100_000)
 
 
 def fetch_json(url, timeout=20):
@@ -41,48 +47,75 @@ def _to_int(value):
         return None
 
 
-def _plausible_pnj(value):
-    number = _to_int(value)
-    if number is None:
+def _plausible(value):
+    if value is None:
         return None
-    low, high = PNJ_PLAUSIBLE
-    if not low <= number <= high:
-        print(f"Bỏ giá PNJ bất thường: {value}", file=sys.stderr)
+    low, high = PLAUSIBLE
+    if not low <= value <= high:
+        print(f"Bỏ giá bất thường: {value}", file=sys.stderr)
         return None
-    return number
+    return value
+
+
+def _empty(source):
+    return {f"{source}_{kind}_{side}": None for kind in ("sjc", "ring") for side in ("buy", "sell")}
 
 
 def parse_pnj(payload):
-    result = {f"{prefix}_{side}": None for prefix in PNJ_PRODUCTS.values() for side in ("buy", "sell")}
+    result = _empty("pnj")
     items = payload.get("data") if isinstance(payload, dict) else None
     if not isinstance(items, list):
         return result
     for item in items:
         if not isinstance(item, dict) or item.get("masp") not in PNJ_PRODUCTS:
             continue
-        prefix = PNJ_PRODUCTS[item["masp"]]
-        result[f"{prefix}_buy"] = _plausible_pnj(item.get("giamua"))
-        result[f"{prefix}_sell"] = _plausible_pnj(item.get("giaban"))
+        kind = PNJ_PRODUCTS[item["masp"]]
+        result[f"pnj_{kind}_buy"] = _plausible(_to_int(item.get("giamua")))
+        result[f"pnj_{kind}_sell"] = _plausible(_to_int(item.get("giaban")))
     return result
 
 
-def parse_xau(payload):
-    if not isinstance(payload, dict):
-        return None
+def _btmc_thousands(value):
+    number = _to_int(value)
+    return None if number is None else _plausible(round(number / 1000))
+
+
+def parse_btmc(payload):
+    """BTMC trả về nhiều mốc giờ cho cùng một sản phẩm; lấy mốc mới nhất."""
+    result = _empty("btmc")
     try:
-        price = round(float(payload["price"]), 2)
-    except (KeyError, TypeError, ValueError):
-        return None
-    return price if price > 0 else None
+        items = payload["DataList"]["Data"]
+    except (TypeError, KeyError):
+        return result
+    if not isinstance(items, list):
+        return result
+    newest = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        row = item.get("@row")
+        kind = BTMC_PRODUCTS.get(item.get(f"@n_{row}"))
+        if kind is None:
+            continue
+        try:
+            when = datetime.strptime(item.get(f"@d_{row}", ""), "%d/%m/%Y %H:%M")
+        except ValueError:
+            continue
+        if kind not in newest or when > newest[kind][0]:
+            newest[kind] = (when, item.get(f"@pb_{row}"), item.get(f"@ps_{row}"))
+    for kind, (_, buy, sell) in newest.items():
+        result[f"btmc_{kind}_buy"] = _btmc_thousands(buy)
+        result[f"btmc_{kind}_sell"] = _btmc_thousands(sell)
+    return result
 
 
-def build_record(now, pnj, xau):
-    if xau is None and all(value is None for value in pnj.values()):
+def build_record(now, *parts):
+    prices = {}
+    for part in parts:
+        prices.update(part)
+    if all(value is None for value in prices.values()):
         return None
-    record = {"t": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
-    record.update(pnj)
-    record["xau_usd"] = xau
-    return record
+    return {"t": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), **prices}
 
 
 def append_record(path, record):
@@ -97,8 +130,8 @@ def append_record(path, record):
 
 def main():
     pnj = parse_pnj(fetch_json(PNJ_URL))
-    xau = parse_xau(fetch_json(XAU_URL))
-    record = build_record(datetime.now(timezone.utc), pnj, xau)
+    btmc = parse_btmc(fetch_json(BTMC_URL))
+    record = build_record(datetime.now(timezone.utc), pnj, btmc)
     if record is None:
         print("Cả hai nguồn đều lỗi, bỏ qua lần này.")
         return 0

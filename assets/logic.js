@@ -90,3 +90,12 @@ export function targetLooksWrong(targetLuong, sellLuong) {
   if (targetLuong == null || sellLuong == null) return false;
   return targetLuong < sellLuong * 0.5 || targetLuong > sellLuong * 1.5;
 }
+
+/** Tiệm có giá thấp nhất trong danh sách {shop, value}; bỏ qua tiệm không có giá. */
+export function cheapest(entries) {
+  let best = null;
+  for (const entry of entries) {
+    if (entry.value != null && (best == null || entry.value < best.value)) best = entry;
+  }
+  return best;
+}
