@@ -110,6 +110,9 @@ button, input { font: inherit; color: inherit; }
 .row__price small { font-size: 0.75rem; font-weight: 400; color: var(--gold-soft); opacity: 0.75; letter-spacing: 0; }
 
 .board__unit { margin: 2px 0 6px; font-size: 0.75rem; opacity: 0.7; }
+.board__sources { margin: 0; font-size: 0.8125rem; color: var(--gold-soft); }
+.board__sources a { color: var(--gold); font-weight: 600; text-underline-offset: 3px; }
+.board__sources a:focus-visible { outline-color: var(--gold); }
 
 .group { margin: 0; padding: 14px 0 2px; border-top: 1px solid rgba(232, 192, 90, 0.45); font-size: 1rem; font-weight: 700; color: var(--gold); }
 .group + .row { border-top: 0; }
