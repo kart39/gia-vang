@@ -1,0 +1,191 @@
+:root {
+  --lacquer: #7d150f;
+  --lacquer-deep: #5c0d09;
+  --gold: #e8c05a;
+  --gold-soft: #f6e3a8;
+  --ink: #221b17;
+  --muted: #6b625c;
+  --page: #f3f1ee;
+  --surface: #ffffff;
+  --line: #e2ddd7;
+  --up: #1d7f47;
+  --down: #c0281f;
+  --flat: #8a837d;
+  --board-up: #8fe0ad;
+  --board-down: #ffb3a7;
+  --focus: #2f62c9;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #f1ece7;
+    --muted: #b3aaa3;
+    --page: #171412;
+    --surface: #221e1b;
+    --line: #3a3430;
+    --up: #5cc98a;
+    --down: #ff7d70;
+    --flat: #9c948e;
+    --focus: #8fb0ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #f1ece7;
+  --muted: #b3aaa3;
+  --page: #171412;
+  --surface: #221e1b;
+  --line: #3a3430;
+  --up: #5cc98a;
+  --down: #ff7d70;
+  --flat: #9c948e;
+  --focus: #8fb0ff;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: "Be Vietnam Pro", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px 16px 40px;
+}
+
+h1, h2 { margin: 0; line-height: 1.25; }
+h2 { font-size: 1.125rem; font-weight: 600; }
+
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* Bảng giá: phần duy nhất được làm nổi bật, mô phỏng bảng giá đỏ chữ vàng ở tiệm vàng. */
+.board {
+  background: linear-gradient(180deg, var(--lacquer), var(--lacquer-deep));
+  color: var(--gold-soft);
+  border-radius: 14px;
+  padding: 20px 18px 16px;
+  box-shadow: inset 0 0 0 1px rgba(232, 192, 90, 0.35);
+}
+.board__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; margin-bottom: 14px; }
+.board h1 { font-size: 1.375rem; font-weight: 700; color: var(--gold); }
+.board__time { margin: 0; font-size: 0.875rem; opacity: 0.85; }
+
+.board__cols,
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(4.5em, auto) minmax(5.5em, auto);
+  gap: 2px 16px;
+  align-items: start;
+}
+.board__cols { font-size: 0.8125rem; opacity: 0.75; padding-bottom: 6px; }
+.board__cols span:not(:first-child) { text-align: right; }
+
+.row { padding: 12px 0; border-top: 1px solid rgba(232, 192, 90, 0.28); }
+.row__name { font-weight: 600; font-size: 0.9375rem; padding-top: 4px; }
+.row__change { grid-column: 1 / -1; font-weight: 500; font-size: 0.8125rem; }
+.row__change:empty { display: none; }
+.row__change[data-dir="up"] { color: var(--board-up); }
+.row__change[data-dir="down"] { color: var(--board-down); }
+.row__change[data-dir="flat"] { opacity: 0.75; }
+
+.row__price {
+  text-align: right;
+  font-size: 1.375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--gold);
+}
+.row__price--sell { display: flex; flex-direction: column; align-items: flex-end; }
+.row__price small { font-size: 0.75rem; font-weight: 400; color: var(--gold-soft); opacity: 0.75; letter-spacing: 0; }
+
+.board__unit { margin: 2px 0 6px; font-size: 0.75rem; opacity: 0.7; }
+
+.row--world { grid-template-columns: minmax(0, 1fr) auto; }
+
+/* Thông báo */
+.notices { display: grid; gap: 10px; margin: 14px 0 0; }
+.notice {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+}
+.notice--hit { background: var(--gold); color: #2b1d02; font-weight: 600; }
+.notice--warn { background: var(--surface); border: 1px solid var(--down); color: var(--ink); }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 14px;
+}
+
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+.seg button {
+  border: 0;
+  background: transparent;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--muted);
+  min-height: 36px;
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--page); font-weight: 600; }
+
+.chart-wrap { position: relative; height: 260px; }
+.chart-empty {
+  position: absolute; inset: 0; margin: 0;
+  display: grid; place-items: center; text-align: center;
+  color: var(--muted); padding: 0 16px;
+}
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; font-size: 0.8125rem; color: var(--muted); }
+.legend__item::before {
+  content: "";
+  display: inline-block;
+  width: 16px; height: 3px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.legend__item--up::before { background: var(--up); }
+.legend__item--down::before { background: var(--down); }
+.legend__item--gap::before { background: repeating-linear-gradient(90deg, var(--flat) 0 3px, transparent 3px 6px); }
+
+.hint { margin: 6px 0 12px; color: var(--muted); font-size: 0.875rem; }
+.targets { display: grid; gap: 12px; }
+.targets label { display: grid; gap: 4px; font-size: 0.9375rem; font-weight: 500; }
+.field { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--page); }
+.field:focus-within { outline: 3px solid var(--focus); outline-offset: 1px; }
+.field input {
+  flex: 1; min-width: 0;
+  border: 0; background: transparent;
+  padding: 10px 12px;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+.field input:focus { outline: none; }
+.field__unit { padding-right: 12px; color: var(--muted); font-size: 0.875rem; }
+.targets__error { margin: 0; color: var(--down); font-size: 0.875rem; min-height: 1em; }
+.targets__error:empty { display: none; }
+
+.foot { margin-top: 18px; text-align: center; color: var(--muted); font-size: 0.8125rem; }
+
+@media (max-width: 380px) {
+  .row__price { font-size: 1.125rem; }
+  .board h1 { font-size: 1.25rem; }
+}

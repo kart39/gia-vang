@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Giá vàng theo giờ</title>
+  <meta name="description" content="Giá vàng SJC, nhẫn trơn 999.9 và vàng thế giới, cập nhật mỗi giờ.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <main class="page">
+    <section class="board" aria-labelledby="board-title">
+      <header class="board__head">
+        <h1 id="board-title">Giá vàng hôm nay</h1>
+        <p class="board__time" id="updated">Đang tải…</p>
+      </header>
+
+      <div class="board__cols" aria-hidden="true">
+        <span></span><span>Mua vào</span><span>Bán ra</span>
+      </div>
+
+      <div class="row" id="row-ring">
+        <div class="row__name">Nhẫn trơn 999.9</div>
+        <div class="row__price" data-buy>–</div>
+        <div class="row__price row__price--sell"><span data-sell>–</span><small data-sell-chi></small></div>
+        <div class="row__change" data-change></div>
+      </div>
+      <div class="row" id="row-sjc">
+        <div class="row__name">Vàng miếng SJC</div>
+        <div class="row__price" data-buy>–</div>
+        <div class="row__price row__price--sell"><span data-sell>–</span><small data-sell-chi></small></div>
+        <div class="row__change" data-change></div>
+      </div>
+      <p class="board__unit">Đơn vị: triệu đồng/lượng · nguồn PNJ</p>
+
+      <div class="row row--world" id="row-xau">
+        <div class="row__name">Vàng thế giới</div>
+        <div class="row__price row__price--sell"><span data-sell>–</span><small>USD/ounce</small></div>
+        <div class="row__change" data-change></div>
+      </div>
+    </section>
+
+    <div class="notices" id="notices" aria-live="polite"></div>
+
+    <section class="panel" aria-labelledby="chart-title">
+      <h2 id="chart-title">Diễn biến giá bán</h2>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Loại vàng" id="seg-series">
+          <button type="button" data-series="ring_sell" aria-pressed="true">Nhẫn trơn</button>
+          <button type="button" data-series="sjc_sell" aria-pressed="false">SJC</button>
+          <button type="button" data-series="xau_usd" aria-pressed="false">Thế giới</button>
+        </div>
+        <div class="seg" role="group" aria-label="Khoảng thời gian" id="seg-range">
+          <button type="button" data-days="1" aria-pressed="false">1 ngày</button>
+          <button type="button" data-days="7" aria-pressed="true">7 ngày</button>
+          <button type="button" data-days="30" aria-pressed="false">30 ngày</button>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chart" aria-label="Biểu đồ giá theo giờ"></canvas>
+        <p class="chart-empty" id="chart-empty" hidden></p>
+      </div>
+      <p class="legend">
+        <span class="legend__item legend__item--up">Đoạn giá tăng</span>
+        <span class="legend__item legend__item--down">Đoạn giá giảm</span>
+        <span class="legend__item legend__item--gap">Chỗ trống: giờ đó không lấy được giá</span>
+      </p>
+    </section>
+
+    <section class="panel" aria-labelledby="target-title">
+      <h2 id="target-title">Giá bạn muốn mua</h2>
+      <p class="hint">Khi giá bán xuống bằng hoặc thấp hơn mức này, trang sẽ báo ở phía trên. Mức giá được lưu trên thiết bị này.</p>
+      <form class="targets" id="targets">
+        <label>
+          <span>Nhẫn trơn 999.9</span>
+          <span class="field"><input name="ring" inputmode="decimal" autocomplete="off" placeholder="VD: 130,5"><span class="field__unit">triệu/lượng</span></span>
+        </label>
+        <label>
+          <span>Vàng miếng SJC</span>
+          <span class="field"><input name="sjc" inputmode="decimal" autocomplete="off" placeholder="VD: 133"><span class="field__unit">triệu/lượng</span></span>
+        </label>
+        <p class="targets__error" id="target-error" role="alert"></p>
+      </form>
+    </section>
+
+    <footer class="foot">Giá được ghi tự động mỗi giờ. Trang tự làm mới sau mỗi 10 phút.</footer>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script type="module" src="assets/app.js"></script>
+</body>
+</html>
